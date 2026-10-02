@@ -1,165 +1,256 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  BarChart3, TrendingUp, Sparkles, ShoppingBag, 
-  ExternalLink, Filter, LayoutDashboard
+  Sparkles, 
+  TrendingUp, 
+  ExternalLink, 
+  ShoppingBag, 
+  RefreshCw, 
+  Layers,
+  Search,
+  Filter
 } from 'lucide-react';
 
-export default function Home() {
-  const [selectedCategory, setSelectedCategory] = useState('全体');
+interface RankingItem {
+  rank: number;
+  itemName: string;
+  itemPrice: number;
+  itemUrl: string;
+  shopName: string;
+  imageUrl: string;
+  reviewCount: number;
+  reviewAverage: number;
+}
+
+export default function RankingDashboard() {
+  const [items, setItems] = useState<RankingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [aiAnalysis, setAiAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
-  const [aiReport, setAiReport] = useState<string | null>(null);
+  const [genreId, setGenreId] = useState('0'); // 0 为综合排行榜
 
-  // 模拟乐天排行榜数据
-  const rankingData = [
-    { rank: 1, title: '【公式】楽天1位獲得！超軽便モバイルバッテリー 10000mAh', category: '家電・スマホ', price: '￥2,980', store: 'Gadget Store', rankDiff: '+2', salesEst: '1,200/日' },
-    { rank: 2, title: '【総合1位】冷感マスク 50枚入り 不織布', category: '日用品・雑貨', price: '￥1,280', store: 'Healthcare Direct', rankDiff: '0', salesEst: '980/日' },
-    { rank: 3, title: 'オーガニック ナッツ 1kg 贅沢4種ミックス', category: '食品・スイーツ', price: '￥1,980', store: 'Food Town', rankDiff: '+5', salesEst: '850/日' },
-    { rank: 4, title: '【予約販売】2026年新作 秋物スウェット Oversized Fit', category: 'レディースファッション', price: '￥3,480', store: 'Fashion Hub', rankDiff: '急上昇', salesEst: '720/日' },
-  ];
+  const appId = process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
+  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
-  const handleAiAnalysis = async () => {
+  // 获取乐天实时排行榜数据
+  const fetchRanking = async (selectedGenre = '0') => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(
+        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&genreId=${selectedGenre}`
+      );
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error_description || '获取排行榜失败');
+      }
+
+      if (data.Items) {
+        const formattedItems: RankingItem[] = data.Items.map((entry: any) => {
+          const item = entry.Item;
+          return {
+            rank: item.rank,
+            itemName: item.itemName,
+            itemPrice: item.itemPrice,
+            itemUrl: item.itemUrl,
+            shopName: item.shopName,
+            imageUrl: item.mediumImageUrls?.[0]?.imageUrl || item.smallImageUrls?.[0]?.imageUrl || '',
+            reviewCount: item.reviewCount || 0,
+            reviewAverage: item.reviewAverage || 0,
+          };
+        });
+        setItems(formattedItems);
+      }
+    } catch (err: any) {
+      setError(err.message || '网络请求异常');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRanking(genreId);
+  }, [genreId]);
+
+  // 调用 Gemini AI 进行选品与爆品趋势分析
+  const handleAiAnalyze = async () => {
+    if (!geminiKey) {
+      alert('未检测到 Gemini API Key，请在 Vercel 环境变量中配置 NEXT_PUBLIC_GEMINI_API_KEY');
+      return;
+    }
+    if (items.length === 0) return;
+
     setAnalyzing(true);
-    setTimeout(() => {
-      setAiReport(`
-### 🤖 Gemini AI 乐天排行榜深度洞察
+    setAiAnalysis('');
 
-1. **爆款类目趋势**：【家電・スマホ】与【秋物ファッション】在过去 24 小时内展现出极强的上升势头。
-2. **定价策略分析**：TOP 5 爆款商品的主流价格带集中在 **￥2,000 - ￥3,500**，且大部分附带“楽天1位”或“公式”关键词标题。
-3. **选品建议**：建议关注“急上昇”标签的秋冬服装及季节性数码配件，提前进行库存调配。
-      `);
+    const top10Data = items.slice(0, 10).map(i => `${i.rank}. ${i.itemName} | 价格: ${i.itemPrice}日元 | 店铺: ${i.shopName}`).join('\n');
+
+    const prompt = `你是一名资深的日本乐天(Rakuten)跨境电商选品专家。请根据以下乐天实时 TOP 10 榜单数据，进行爆品趋势分析和选品建议：\n\n${top100DataText(items)}\n\n请按以下结构输出简明扼要的中文报告：\n1. 【爆款品类与趋势特征】\n2. 【核心价格带分析】\n3. 【卖家选品与运营避坑建议】`;
+
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }]
+          })
+        }
+      );
+      const resData = await response.json();
+      const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text || '分析结果生成失败，请重试。';
+      setAiAnalysis(text);
+    } catch (err: any) {
+      setAiAnalysis('Gemini AI 分析失败：' + err.message);
+    } finally {
       setAnalyzing(false);
-    }, 1500);
+    }
+  };
+
+  const top100DataText = (list: RankingItem[]) => {
+    return list.slice(0, 10).map(i => `#${i.rank} ${i.itemName} (￥${i.itemPrice})`).join('\n');
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
-      {/* 侧边栏 */}
-      <div className="w-64 bg-slate-900 text-white p-5 flex flex-col justify-between">
+    <div className="min-h-screen bg-slate-900 text-slate-100 flex">
+      {/* 侧边导航栏 */}
+      <aside className="w-64 bg-slate-950 border-r border-slate-800 p-6 flex flex-col justify-between">
         <div>
-          <div className="flex items-center gap-3 text-xl font-bold text-red-500 mb-8">
-            <ShoppingBag className="w-7 h-7" />
-            <span>樂天 Ranking AI</span>
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center font-black text-xl text-white shadow-lg">
+              R
+            </div>
+            <div>
+              <h1 className="font-bold text-lg text-white">Ranking AI</h1>
+              <p className="text-xs text-slate-400">乐天选品分析系统</p>
+            </div>
           </div>
+
           <nav className="space-y-2">
-            <button className="flex items-center gap-3 w-full px-4 py-3 bg-red-600 text-white rounded-lg font-medium">
-              <LayoutDashboard className="w-5 h-5" /> 实时榜单监测
+            <button className="w-full flex items-center gap-3 px-4 py-3 bg-red-600/10 text-red-500 rounded-xl font-medium text-sm border border-red-500/20">
+              <TrendingUp size={18} /> 实时排行榜
             </button>
-            <button className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:bg-slate-800 rounded-lg">
-              <TrendingUp className="w-5 h-5" /> 飙升品类追踪
-            </button>
-            <button className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:bg-slate-800 rounded-lg">
-              <Sparkles className="w-5 h-5" /> AI 选品建议
+            <button className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:bg-slate-900 rounded-xl font-medium text-sm transition">
+              <Layers size={18} /> 分类导航
             </button>
           </nav>
         </div>
+
         <div className="text-xs text-slate-500 border-t border-slate-800 pt-4">
           Rakuten AI Studio v1.0
         </div>
-      </div>
+      </aside>
 
-      {/* 主内容区 */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
-        <header className="bg-white border-b border-slate-200 px-8 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            乐天市场 TOP1000 榜单监测
-          </h1>
-          <button 
-            onClick={handleAiAnalysis}
-            disabled={analyzing}
-            className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-md transition-all"
-          >
-            <Sparkles className="w-5 h-5" />
-            {analyzing ? 'AI 正在分析榜单...' : '生成 Gemini AI 洞察报告'}
-          </button>
-        </header>
-
-        <main className="p-8 space-y-6">
-          {aiReport && (
-            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6 shadow-sm">
-              <div className="prose max-w-none text-slate-800 whitespace-pre-line">
-                {aiReport}
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-4 gap-6">
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-sm text-slate-500">今日监测总商品数</span>
-              <div className="text-2xl font-bold text-slate-900 mt-1">1,000 点</div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-sm text-slate-500">新晋榜单商品</span>
-              <div className="text-2xl font-bold text-emerald-600 mt-1">+42 点</div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-sm text-slate-500">平均爆款价格</span>
-              <div className="text-2xl font-bold text-slate-900 mt-1">￥2,450</div>
-            </div>
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-sm text-slate-500">榜单更新频率</span>
-              <div className="text-2xl font-bold text-indigo-600 mt-1">每 30 分钟</div>
-            </div>
+      {/* 主体区域 */}
+      <main className="flex-1 p-8 overflow-y-auto">
+        {/* 顶栏 */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h2 className="text-2xl font-bold text-white mb-1">乐天市场 TOP 实时榜单</h2>
+            <p className="text-xs text-slate-400">数据实时对接日本乐天官方 API 接口</p>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="font-bold text-slate-900 text-lg">实时排行榜单</h2>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <select 
-                  value={selectedCategory} 
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm"
-                >
-                  <option value="全体">全体类目</option>
-                  <option value="家電・スマホ">家電・スマホ</option>
-                  <option value="日用品・雑貨">日用品・雑貨</option>
-                  <option value="食品・スイーツ">食品・スイーツ</option>
-                  <option value="レディースファッション">レディースファッション</option>
-                </select>
-              </div>
-            </div>
+          <div className="flex gap-3">
+            <button 
+              onClick={() => fetchRanking(genreId)}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm border border-slate-700 transition"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 刷新榜单
+            </button>
+            <button 
+              onClick={handleAiAnalyze}
+              disabled={analyzing || loading}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-sm font-medium shadow-lg transition disabled:opacity-50"
+            >
+              <Sparkles size={16} /> {analyzing ? 'AI 分析中...' : 'Gemini AI 智能选品分析'}
+            </button>
+          </div>
+        </div>
 
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-500 text-xs uppercase font-medium border-b border-slate-200">
-                  <th className="py-3 px-6">排名</th>
-                  <th className="py-3 px-6">商品名称</th>
-                  <th className="py-3 px-6">类目</th>
-                  <th className="py-3 px-6">销售单价</th>
-                  <th className="py-3 px-6">排名变动</th>
-                  <th className="py-3 px-6">估算日销量</th>
+        {/* AI 分析面板 */}
+        {aiAnalysis && (
+          <div className="mb-8 p-6 bg-gradient-to-br from-purple-900/30 to-indigo-900/30 border border-purple-500/30 rounded-2xl shadow-xl">
+            <h3 className="text-lg font-bold text-purple-300 mb-3 flex items-center gap-2">
+              <Sparkles size={20} /> Gemini选品深度报告
+            </h3>
+            <div className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed">
+              {aiAnalysis}
+            </div>
+          </div>
+        )}
+
+        {/* 数据列表 */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+            <RefreshCw size={32} className="animate-spin mb-4 text-red-500" />
+            <p className="text-sm">正在拉取日本乐天实时排行榜数据...</p>
+          </div>
+        ) : error ? (
+          <div className="p-6 bg-red-950/40 border border-red-800/50 rounded-xl text-red-400 text-sm">
+            加载错误: {error}
+          </div>
+        ) : (
+          <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900/80 text-slate-400 uppercase text-xs border-b border-slate-800">
+                <tr>
+                  <th className="px-6 py-4">排名</th>
+                  <th className="px-6 py-4">商品图片</th>
+                  <th className="px-6 py-4">商品名称</th>
+                  <th className="px-6 py-4">价格 (円)</th>
+                  <th className="px-6 py-4">店铺</th>
+                  <th className="px-6 py-4">评价</th>
+                  <th className="px-6 py-4 text-right">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {rankingData.map((item) => (
-                  <tr key={item.rank} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-4 px-6 font-bold text-slate-900">#{item.rank}</td>
-                    <td className="py-4 px-6 font-medium text-slate-800 flex items-center gap-2">
-                      {item.title}
-                      <ExternalLink className="w-4 h-4 text-slate-400 hover:text-red-500 cursor-pointer" />
+              <tbody className="divide-y divide-slate-800">
+                {items.map((item) => (
+                  <tr key={item.rank} className="hover:bg-slate-900/50 transition">
+                    <td className="px-6 py-4 font-bold text-base text-red-400">
+                      #{item.rank}
                     </td>
-                    <td className="py-4 px-6 text-slate-600">{item.category}</td>
-                    <td className="py-4 px-6 font-bold text-slate-900">{item.price}</td>
-                    <td className="py-4 px-6">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        item.rankDiff.includes('+') || item.rankDiff === '急上昇' 
-                          ? 'bg-emerald-100 text-emerald-700' 
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {item.rankDiff}
-                      </span>
+                    <td className="px-6 py-4">
+                      {item.imageUrl ? (
+                        <img src={item.imageUrl} alt={item.itemName} className="w-12 h-12 object-cover rounded-lg border border-slate-700" />
+                      ) : (
+                        <div className="w-12 h-12 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500">
+                          <ShoppingBag size={20} />
+                        </div>
+                      )}
                     </td>
-                    <td className="py-4 px-6 text-slate-600">{item.salesEst}</td>
+                    <td className="px-6 py-4 max-w-xs truncate font-medium text-slate-200" title={item.itemName}>
+                      {item.itemName}
+                    </td>
+                    <td className="px-6 py-4 font-semibold text-emerald-400">
+                      ¥{item.itemPrice.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-slate-400 max-w-[150px] truncate">
+                      {item.shopName}
+                    </td>
+                    <td className="px-6 py-4 text-slate-400">
+                      ★ {item.reviewAverage} ({item.reviewCount})
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <a
+                        href={item.itemUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-red-400 hover:text-red-300 font-medium"
+                      >
+                        乐天链接 <ExternalLink size={12} />
+                      </a>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </main>
-      </div>
+        )}
+      </main>
     </div>
   );
 }
