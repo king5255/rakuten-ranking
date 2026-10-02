@@ -7,9 +7,7 @@ import {
   ExternalLink, 
   ShoppingBag, 
   RefreshCw, 
-  Layers,
-  Search,
-  Filter
+  Layers
 } from 'lucide-react';
 
 interface RankingItem {
@@ -29,23 +27,24 @@ export default function RankingDashboard() {
   const [error, setError] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
-  const [genreId, setGenreId] = useState('0'); // 0 为综合排行榜
 
-  const appId = process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
-  const geminiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
+  // 获取环境变量并清洗空格
+  const rawAppId = process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
+  const appId = rawAppId.trim();
+  const geminiKey = (process.env.NEXT_PUBLIC_GEMINI_API_KEY || '').trim();
 
   // 获取乐天实时排行榜数据
-  const fetchRanking = async (selectedGenre = '0') => {
+  const fetchRanking = async () => {
     setLoading(true);
     setError('');
     try {
       const res = await fetch(
-        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&genreId=${selectedGenre}`
+        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}`
       );
       const data = await res.json();
 
       if (data.error) {
-        throw new Error(data.error_description || '获取排行榜失败');
+        throw new Error(data.error_description || data.error || '获取排行榜失败');
       }
 
       if (data.Items) {
@@ -72,13 +71,13 @@ export default function RankingDashboard() {
   };
 
   useEffect(() => {
-    fetchRanking(genreId);
-  }, [genreId]);
+    fetchRanking();
+  }, []);
 
-  // 调用 Gemini AI 进行选品与爆品趋势分析
+  // 调用 Gemini AI 分析
   const handleAiAnalyze = async () => {
     if (!geminiKey) {
-      alert('未检测到 Gemini API Key，请在 Vercel 环境变量中配置 NEXT_PUBLIC_GEMINI_API_KEY');
+      alert('未配置 Gemini API Key，请在 Vercel 环境变量中设置 NEXT_PUBLIC_GEMINI_API_KEY');
       return;
     }
     if (items.length === 0) return;
@@ -88,7 +87,7 @@ export default function RankingDashboard() {
 
     const top10Data = items.slice(0, 10).map(i => `${i.rank}. ${i.itemName} | 价格: ${i.itemPrice}日元 | 店铺: ${i.shopName}`).join('\n');
 
-    const prompt = `你是一名资深的日本乐天(Rakuten)跨境电商选品专家。请根据以下乐天实时 TOP 10 榜单数据，进行爆品趋势分析和选品建议：\n\n${top100DataText(items)}\n\n请按以下结构输出简明扼要的中文报告：\n1. 【爆款品类与趋势特征】\n2. 【核心价格带分析】\n3. 【卖家选品与运营避坑建议】`;
+    const prompt = `你是一名资深的日本乐天(Rakuten)跨境电商选品专家。请根据以下乐天实时 TOP 10 榜单数据，进行爆品趋势分析和选品建议：\n\n${top10Data}\n\n请按以下结构输出简明扼要的中文报告：\n1. 【爆款品类与趋势特征】\n2. 【核心价格带分析】\n3. 【卖家选品与运营避坑建议】`;
 
     try {
       const response = await fetch(
@@ -109,10 +108,6 @@ export default function RankingDashboard() {
     } finally {
       setAnalyzing(false);
     }
-  };
-
-  const top100DataText = (list: RankingItem[]) => {
-    return list.slice(0, 10).map(i => `#${i.rank} ${i.itemName} (￥${i.itemPrice})`).join('\n');
   };
 
   return (
@@ -156,7 +151,7 @@ export default function RankingDashboard() {
 
           <div className="flex gap-3">
             <button 
-              onClick={() => fetchRanking(genreId)}
+              onClick={fetchRanking}
               className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm border border-slate-700 transition"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> 刷新榜单
