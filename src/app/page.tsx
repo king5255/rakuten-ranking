@@ -28,28 +28,19 @@ export default function RankingDashboard() {
   const [aiAnalysis, setAiAnalysis] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
 
-  // 获取环境变量并清洗空格
-  const rawAppId = process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
-  const appId = rawAppId.trim();
-
-  const rawAccessKey = process.env.NEXT_PUBLIC_RAKUTEN_ACCESS_KEY || 'pk_1oJBMGwDHMuQ77kuDC11obpf4uQ84INKFM5N14tx75c';
-  const accessKey = rawAccessKey.trim();
-
   const geminiKey = (process.env.NEXT_PUBLIC_GEMINI_API_KEY || '').trim();
 
-  // 获取乐天实时排行榜数据
+  // 获取乐天实时排行榜数据（请求本地后端代理）
   const fetchRanking = async () => {
     setLoading(true);
     setError('');
     try {
-      // ✅ 使用乐天最新官方 openapi 域名与路径
-      const res = await fetch(
-        `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&accessKey=${accessKey}`
-      );
+      // ✅ 修改点：向本地 API Route 发起请求，规避跨域 CORS 问题
+      const res = await fetch('/api/rakuten/ranking');
       const data = await res.json();
 
-      if (data.error) {
-        throw new Error(data.error_description || data.error || '获取排行榜失败');
+      if (!res.ok || data.error) {
+        throw new Error(data.error || '获取排行榜失败');
       }
 
       if (data.Items) {
