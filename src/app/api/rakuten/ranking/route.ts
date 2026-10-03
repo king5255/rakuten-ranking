@@ -1,18 +1,20 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  // 强制确保拿到非空的 AppId
-  const appId = (process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '').trim() || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
+// 强制写死可用的官方 AppID，不读取环境变量，避免 Vercel 变量污染
+const RAKUTEN_APP_ID = '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
 
-  const targetUrl = `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${encodeURIComponent(appId)}`;
+export async function GET() {
+  const targetUrl = `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${RAKUTEN_APP_ID}`;
 
   try {
     const res = await fetch(targetUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       },
-      next: { revalidate: 300 }
+      // 禁用 fetch 缓存，确保每次拿到最新的数据
+      cache: 'no-store'
     });
 
     const data = await res.json();
