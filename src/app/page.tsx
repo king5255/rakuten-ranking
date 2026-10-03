@@ -42,9 +42,9 @@ export default function RankingDashboard() {
     setLoading(true);
     setError('');
     try {
-      // ✅ 同时传入 applicationId 和 accessKey
+      // ✅ 使用乐天最新官方 openapi 域名与路径
       const res = await fetch(
-        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&accessKey=${accessKey}`
+        `https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&accessKey=${accessKey}`
       );
       const data = await res.json();
 
