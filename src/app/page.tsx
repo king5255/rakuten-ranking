@@ -31,6 +31,10 @@ export default function RankingDashboard() {
   // 获取环境变量并清洗空格
   const rawAppId = process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
   const appId = rawAppId.trim();
+
+  const rawAccessKey = process.env.NEXT_PUBLIC_RAKUTEN_ACCESS_KEY || 'pk_1oJBMGwDHMuQ77kuDC11obpf4uQ84INKFM5N14tx75c';
+  const accessKey = rawAccessKey.trim();
+
   const geminiKey = (process.env.NEXT_PUBLIC_GEMINI_API_KEY || '').trim();
 
   // 获取乐天实时排行榜数据
@@ -38,8 +42,9 @@ export default function RankingDashboard() {
     setLoading(true);
     setError('');
     try {
+      // ✅ 同时传入 applicationId 和 accessKey
       const res = await fetch(
-        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}`
+        `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&accessKey=${accessKey}`
       );
       const data = await res.json();
 
