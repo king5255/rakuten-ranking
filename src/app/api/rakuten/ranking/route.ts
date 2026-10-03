@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  // 从环境变量获取 appId，若未配置则使用默认的 appId
-  const appId = (process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '6633c218-2b98-49f7-90f2-b92b3a5cebc9').trim();
+  // 强制确保拿到非空的 AppId
+  const appId = (process.env.NEXT_PUBLIC_RAKUTEN_APP_ID || '').trim() || '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
 
-  // 乐天官方经典稳定版排行榜 API (无需 accessKey)
-  const targetUrl = `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}`;
+  const targetUrl = `https://app.rakuten.co.jp/services/api/IchibaItem/Ranking/20220601?format=json&applicationId=${encodeURIComponent(appId)}`;
 
   try {
     const res = await fetch(targetUrl, {
@@ -13,7 +12,6 @@ export async function GET() {
       headers: {
         'Accept': 'application/json',
       },
-      // 缓存 5 分钟，降低乐天 API 频率限制风险
       next: { revalidate: 300 }
     });
 
