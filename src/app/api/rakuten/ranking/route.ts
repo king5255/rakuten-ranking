@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  // 替换为您乐天后台对应的实际值
-  const appId = '6633c218-2b98-49f7-90f2-b92b3a5cebc9';
-  const accessKey = 'pk_1oJBMGwDHMuQ77kuDC11obpf4uQ84INKFM5N14tx75c';
+  // 最新のアプリケーションクレデンシャル
+  const appId = 'f4758851-e1cf-4872-a996-cd5f7046b19b';
+  const accessKey = 'pk_iXQR2KJxHLiv8jXTo5I136cEJzxxo0bVhnr4MQslRU';
 
-  // 新版 OpenAPI 正确要求的 URL（必须带有 accessKey）
+  // 楽天 Open API ランキング API エンドポイント
   const targetUrl = `https://openapi.rakuten.co.jp/ichibaranking/api/IchibaItem/Ranking/20220601?format=json&applicationId=${appId}&accessKey=${accessKey}`;
 
   try {
@@ -14,17 +14,17 @@ export async function GET() {
       headers: {
         'Accept': 'application/json',
         'Authorization': `Bearer ${accessKey}`,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
       cache: 'no-store'
     });
 
     const data = await res.json();
 
-    // 如果接口返回了错误，把完整的错误详情透传出来，方便调试
     if (!res.ok || data.error) {
+      const errMsg = data.error_description || data.error || `HTTP ${res.status}`;
       return NextResponse.json(
-        { error: JSON.stringify(data) },
+        { error: `楽天 API エラー: ${errMsg}` },
         { status: res.status || 500 }
       );
     }
@@ -32,7 +32,7 @@ export async function GET() {
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json(
-      { error: `服务器请求异常: ${error.message}` },
+      { error: `サーバーリクエスト例外: ${error.message || '不明なエラー'}` },
       { status: 500 }
     );
   }
